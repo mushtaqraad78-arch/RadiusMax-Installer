@@ -1,16 +1,19 @@
-# RadiusMax Phase 7F one-command MikroTik installer
-# Release candidate: v0.7.5-installer1
-# Immutable image: ghcr.io/mushtaqraad78-arch/radiusmax-agent:v0.7.5@sha256:b8ad981e42d17dbdc9c4e71b91a7d00bddecff1687bd076bd5d67cf02141557d
+# RadiusMax Remote Device Gateway RC installer
+# Release candidate: v0.8.0-rc1-installer1
+# Immutable image: ghcr.io/mushtaqraad78-arch/radiusmax-agent:v0.8.0-rc1@sha256:b783104b94c8c912f41103748ad8932acef83b2e032469d3127df9c080f07267
 # This script never changes PPP, RADIUS, subscriber, or route configuration.
 # It adds only the dedicated Agent network, input allow, and source-NAT objects below.
 
 {
-    :local rmxInstallerVersion "v0.7.5-installer1";
+    :local rmxInstallerVersion "v0.8.0-rc1-installer1";
     :local rmxManagedComment "RADIUSMAX-PHASE7F-MANAGED";
     :local rmxContainerName "radiusmax-agent";
-    :local rmxImage "mushtaqraad78-arch/radiusmax-agent:v0.7.5@sha256:b8ad981e42d17dbdc9c4e71b91a7d00bddecff1687bd076bd5d67cf02141557d";
-    :local rmxImageFull "ghcr.io/mushtaqraad78-arch/radiusmax-agent:v0.7.5@sha256:b8ad981e42d17dbdc9c4e71b91a7d00bddecff1687bd076bd5d67cf02141557d";
-    :local rmxGateway "ws://167.86.73.203:8080/ws";
+    :local rmxImage "mushtaqraad78-arch/radiusmax-agent:v0.8.0-rc1@sha256:b783104b94c8c912f41103748ad8932acef83b2e032469d3127df9c080f07267";
+    :local rmxImageFull "ghcr.io/mushtaqraad78-arch/radiusmax-agent:v0.8.0-rc1@sha256:b783104b94c8c912f41103748ad8932acef83b2e032469d3127df9c080f07267";
+    # Quoted custom identifier avoids the RouterOS 7.24.2 external-source parser
+    # rejecting the old bare rmxGateway declaration at block line 7 column 17.
+    :local "rmxCentralURL";
+    :set "rmxCentralURL" "ws://167.86.73.203:8080/ws";
     :local rmxBridge "radiusmax-agent-br";
     :local rmxVeth "radiusmax-agent-veth";
     :local rmxRouterAddress "172.31.255.1/30";
@@ -18,6 +21,7 @@
     :local rmxAgentAddress "172.31.255.2/30";
     :local rmxAgentIP "172.31.255.2";
     :local rmxNetwork "172.31.255.0/30";
+    :local rmxRemoteDeviceDenyCIDRs "172.31.255.0/30";
     :local rmxUser "radiusmax-agent";
     :local rmxGroup "radiusmax-agent-7f";
     :local rmxEnvList "radiusmax-agent-env";
@@ -46,7 +50,8 @@
         };
         :put "RadiusMax already installed/no-op: existing container and enrolled state were left unchanged.";
         :put "Use /container/print detail where name=radiusmax-agent to inspect status.";
-        :return;
+        # :exit is the RouterOS 7.22+ command for terminating the imported script.
+        :exit;
     };
 
     # RouterOS 7.23 is required for the current container restart-policy controls.
@@ -125,7 +130,7 @@
     :local rmxStateDir "";
     :local rmxRootDir "";
     :local rmxTmpDir "";
-    :local rmxStateFiles [/file find where name~"radiusmax/state/enrollment.json$"];
+    :local rmxStateFiles [/file find where name~"radiusmax/state/enrollment.json\$"];
     :if ([:len $rmxStateFiles] > 1) do={
         :error "RadiusMax: multiple enrollment states found; refusing to choose or clone an identity";
     };
@@ -176,9 +181,9 @@
     :local rmxIdentity [/system identity get name];
     :local rmxBoard [/system resource get board-name];
     :local rmxSerial "";
-    :onerror rmxSerialError in={ :set rmxSerial [/system routerboard get serial-number] } do={};
+    :onerror rmxSerialError in={ :set rmxSerial [/system routerboard get serial-number] } do={ :set rmxSerial "" };
     :if ($rmxSerial = "") do={
-        :onerror rmxLicenseError in={ :set rmxSerial [/system license get software-id] } do={};
+        :onerror rmxLicenseError in={ :set rmxSerial [/system license get software-id] } do={ :set rmxSerial "" };
     };
     :if ($rmxSerial = "") do={ :set rmxSerial "unavailable" };
     :local rmxDeviceIdentity ("mikrotik|identity=" . $rmxIdentity . "|serial=" . $rmxSerial . "|board=" . $rmxBoard . "|arch=" . $rmxArchitecture);
@@ -248,7 +253,8 @@
             :error ("RadiusMax: managed environment key has an unexpected value: " . $rmxKey);
         };
     };
-    $rmxValidateEnv "RADIUSMAX_GATEWAY_URL" $rmxGateway;
+    $rmxValidateEnv "RADIUSMAX_GATEWAY_URL" $"rmxCentralURL";
+    $rmxValidateEnv "RADIUSMAX_REMOTE_DEVICE_DENY_CIDRS" $rmxRemoteDeviceDenyCIDRs;
     $rmxValidateEnv "RADIUSMAX_STATE_DIR" "/var/lib/radiusmax";
     $rmxValidateEnv "RADIUSMAX_LOCAL_TARGET" "http://127.0.0.1:8095";
     $rmxValidateEnv "RADIUSMAX_DEVICE_IDENTITY" $rmxDeviceIdentity;
@@ -258,7 +264,9 @@
     $rmxValidateEnv "MIKROTIK_TLS" "false";
     $rmxValidateEnv "MIKROTIK_READ_ONLY" "false";
 
-    :local rmxConfig [/container config print as-value];
+    :local rmxConfigRows [/container config print as-value];
+    :if ([:len $rmxConfigRows] != 1) do={ :error "RadiusMax: cannot read the singleton Container configuration" };
+    :local rmxConfig [:pick $rmxConfigRows 0];
     :local rmxOldRegistry ($rmxConfig->"registry-url");
     :local rmxOldTmp ($rmxConfig->"tmpdir");
     :put ("RadiusMax preflight passed: RouterOS " . $rmxROSVersion . ", architecture " . $rmxArchitecture . ", storage " . $rmxStateDir);
@@ -342,7 +350,8 @@
             :if ([/container envs get $rmxItems value] != $rmxValue) do={ :error ("RadiusMax: managed environment key has an unexpected value: " . $rmxKey) };
         };
     };
-    $rmxEnsureEnv "RADIUSMAX_GATEWAY_URL" $rmxGateway;
+    $rmxEnsureEnv "RADIUSMAX_GATEWAY_URL" $"rmxCentralURL";
+    $rmxEnsureEnv "RADIUSMAX_REMOTE_DEVICE_DENY_CIDRS" $rmxRemoteDeviceDenyCIDRs;
     $rmxEnsureEnv "RADIUSMAX_STATE_DIR" "/var/lib/radiusmax";
     $rmxEnsureEnv "RADIUSMAX_LOCAL_TARGET" "http://127.0.0.1:8095";
     $rmxEnsureEnv "RADIUSMAX_DEVICE_IDENTITY" $rmxDeviceIdentity;
