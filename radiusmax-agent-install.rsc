@@ -1,11 +1,11 @@
 # RadiusMax Remote Device Gateway RC installer
-# Release candidate: v0.8.0-rc1-installer1
+# Release candidate: v0.8.0-rc1-installer2
 # Immutable image: ghcr.io/mushtaqraad78-arch/radiusmax-agent:v0.8.0-rc1@sha256:b783104b94c8c912f41103748ad8932acef83b2e032469d3127df9c080f07267
 # This script never changes PPP, RADIUS, subscriber, or route configuration.
 # It adds only the dedicated Agent network, input allow, and source-NAT objects below.
 
 {
-    :local rmxInstallerVersion "v0.8.0-rc1-installer1";
+    :local rmxInstallerVersion "v0.8.0-rc1-installer2";
     :local rmxManagedComment "RADIUSMAX-PHASE7F-MANAGED";
     :local rmxContainerName "radiusmax-agent";
     :local rmxImage "mushtaqraad78-arch/radiusmax-agent:v0.8.0-rc1@sha256:b783104b94c8c912f41103748ad8932acef83b2e032469d3127df9c080f07267";
@@ -264,11 +264,8 @@
     $rmxValidateEnv "MIKROTIK_TLS" "false";
     $rmxValidateEnv "MIKROTIK_READ_ONLY" "false";
 
-    :local rmxConfigRows [/container config print as-value];
-    :if ([:len $rmxConfigRows] != 1) do={ :error "RadiusMax: cannot read the singleton Container configuration" };
-    :local rmxConfig [:pick $rmxConfigRows 0];
-    :local rmxOldRegistry ($rmxConfig->"registry-url");
-    :local rmxOldTmp ($rmxConfig->"tmpdir");
+    :local rmxOldRegistry [/container config get registry-url];
+    :local rmxOldTmp [/container config get tmpdir];
     :put ("RadiusMax preflight passed: RouterOS " . $rmxROSVersion . ", architecture " . $rmxArchitecture . ", storage " . $rmxStateDir);
 
     # PHASE 2: APPLY. From this point forward, create or reuse only RadiusMax-owned objects.
