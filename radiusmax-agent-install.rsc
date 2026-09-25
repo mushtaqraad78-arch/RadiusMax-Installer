@@ -1,15 +1,15 @@
 # RadiusMax Remote Device Gateway RC installer
-# Release candidate: v0.8.0-rc2-installer2
-# Immutable image: ghcr.io/mushtaqraad78-arch/radiusmax-agent:v0.8.0-rc2@sha256:435840a9a03e5e73b8fd42408f83222507162ecec9eea4e28e7075ba23e4619f
+# Release candidate: v0.8.0-rc2-installer3
+# Immutable image: ghcr.io/mushtaqraad78-arch/radiusmax-agent:v0.8.0-rc2@sha256:f6bcb2bafdb786d1c38e767ff233cb1b7d706d02278e9e098f66443e9020c69c
 # This script never changes PPP, RADIUS, subscriber, or route configuration.
 # It adds only the dedicated Agent network, input allow, and source-NAT objects below.
 
 {
-    :local rmxInstallerVersion "v0.8.0-rc2-installer2";
+    :local rmxInstallerVersion "v0.8.0-rc2-installer3";
     :local rmxManagedComment "RADIUSMAX-PHASE7F-MANAGED";
     :local rmxContainerName "radiusmax-agent";
-    :local rmxImage "mushtaqraad78-arch/radiusmax-agent:v0.8.0-rc2@sha256:435840a9a03e5e73b8fd42408f83222507162ecec9eea4e28e7075ba23e4619f";
-    :local rmxImageFull "ghcr.io/mushtaqraad78-arch/radiusmax-agent:v0.8.0-rc2@sha256:435840a9a03e5e73b8fd42408f83222507162ecec9eea4e28e7075ba23e4619f";
+    :local rmxImage "mushtaqraad78-arch/radiusmax-agent:v0.8.0-rc2@sha256:f6bcb2bafdb786d1c38e767ff233cb1b7d706d02278e9e098f66443e9020c69c";
+    :local rmxImageFull "ghcr.io/mushtaqraad78-arch/radiusmax-agent:v0.8.0-rc2@sha256:f6bcb2bafdb786d1c38e767ff233cb1b7d706d02278e9e098f66443e9020c69c";
     # Quoted custom identifier avoids the RouterOS 7.24.2 external-source parser
     # rejecting the old bare rmxGateway declaration at block line 7 column 17.
     :local "rmxCentralURL";
@@ -72,6 +72,10 @@
     };
 
     :local rmxArchitecture [/system resource get architecture-name];
+    :if (($rmxArchitecture = "x86_64") or ($rmxArchitecture = "amd64")) do={
+        :set rmxImage "mushtaqraad78-arch/radiusmax-agent:v0.8.0-rc2-amd64@sha256:f6bcb2bafdb786d1c38e767ff233cb1b7d706d02278e9e098f66443e9020c69c";
+        :set rmxImageFull "ghcr.io/mushtaqraad78-arch/radiusmax-agent:v0.8.0-rc2-amd64@sha256:f6bcb2bafdb786d1c38e767ff233cb1b7d706d02278e9e098f66443e9020c69c";
+    };
     :if (($rmxArchitecture != "arm") and ($rmxArchitecture != "arm64") and ($rmxArchitecture != "x86_64") and ($rmxArchitecture != "amd64")) do={
         :error ("RadiusMax: unsupported architecture " . $rmxArchitecture . "; supported: arm, arm64, x86_64");
     };
