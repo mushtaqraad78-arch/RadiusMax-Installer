@@ -1,11 +1,11 @@
 # RadiusMax Remote Device Gateway RC installer
-# Release candidate: v0.8.0-rc2-installer3
+# Release candidate: v0.8.0-rc2-installer4
 # Immutable image: ghcr.io/mushtaqraad78-arch/radiusmax-agent:v0.8.0-rc2@sha256:f6bcb2bafdb786d1c38e767ff233cb1b7d706d02278e9e098f66443e9020c69c
 # This script never changes PPP, RADIUS, subscriber, or route configuration.
 # It adds only the dedicated Agent network, input allow, and source-NAT objects below.
 
 {
-    :local rmxInstallerVersion "v0.8.0-rc2-installer3";
+    :local rmxInstallerVersion "v0.8.0-rc2-installer4";
     :local rmxManagedComment "RADIUSMAX-PHASE7F-MANAGED";
     :local rmxContainerName "radiusmax-agent";
     :local rmxImage "mushtaqraad78-arch/radiusmax-agent:v0.8.0-rc2@sha256:f6bcb2bafdb786d1c38e767ff233cb1b7d706d02278e9e098f66443e9020c69c";
@@ -405,9 +405,9 @@
 
     :local rmxStatusScript [/system script find where name="radiusmax-status"];
     :if ([:len $rmxStatusScript] = 0) do={
-        /system script add name="radiusmax-status" source=":local sf [/file find where name~\"radiusmax/state/status.txt\$\"]; :if ([:len \$sf] > 0) do={ :put [/file get [:pick \$sf 0] contents] } else={ :put \"RadiusMax Agent is initializing... please wait a few moments and run this command again.\" };" comment=$rmxManagedComment;
+        /system script add name="radiusmax-status" source=":local sf [/file find where name=\"sata1/radiusmax/state/status.txt\"]; :if ([:len \$sf] > 0) do={ :put [/file get [:pick \$sf 0] contents] } else={ :put \"RadiusMax Agent is initializing... please wait a few moments and run this command again.\" };" comment=$rmxManagedComment;
     } else={
-        /system script set $rmxStatusScript source=":local sf [/file find where name~\"radiusmax/state/status.txt\$\"]; :if ([:len \$sf] > 0) do={ :put [/file get [:pick \$sf 0] contents] } else={ :put \"RadiusMax Agent is initializing... please wait a few moments and run this command again.\" };";
+        /system script set $rmxStatusScript source=":local sf [/file find where name=\"sata1/radiusmax/state/status.txt\"]; :if ([:len \$sf] > 0) do={ :put [/file get [:pick \$sf 0] contents] } else={ :put \"RadiusMax Agent is initializing... please wait a few moments and run this command again.\" };";
     };
 
     :local rmxNewContainer [/container find where name=$rmxContainerName];
