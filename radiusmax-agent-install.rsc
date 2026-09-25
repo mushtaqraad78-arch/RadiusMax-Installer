@@ -1,15 +1,15 @@
 # RadiusMax Remote Device Gateway RC installer
-# Release candidate: v0.8.0-rc1-installer2
-# Immutable image: ghcr.io/mushtaqraad78-arch/radiusmax-agent:v0.8.0-rc1@sha256:b783104b94c8c912f41103748ad8932acef83b2e032469d3127df9c080f07267
+# Release candidate: v0.8.0-rc2-installer2
+# Immutable image: ghcr.io/mushtaqraad78-arch/radiusmax-agent:v0.8.0-rc2@sha256:435840a9a03e5e73b8fd42408f83222507162ecec9eea4e28e7075ba23e4619f
 # This script never changes PPP, RADIUS, subscriber, or route configuration.
 # It adds only the dedicated Agent network, input allow, and source-NAT objects below.
 
 {
-    :local rmxInstallerVersion "v0.8.0-rc1-installer2";
+    :local rmxInstallerVersion "v0.8.0-rc2-installer2";
     :local rmxManagedComment "RADIUSMAX-PHASE7F-MANAGED";
     :local rmxContainerName "radiusmax-agent";
-    :local rmxImage "mushtaqraad78-arch/radiusmax-agent:v0.8.0-rc1@sha256:b783104b94c8c912f41103748ad8932acef83b2e032469d3127df9c080f07267";
-    :local rmxImageFull "ghcr.io/mushtaqraad78-arch/radiusmax-agent:v0.8.0-rc1@sha256:b783104b94c8c912f41103748ad8932acef83b2e032469d3127df9c080f07267";
+    :local rmxImage "mushtaqraad78-arch/radiusmax-agent:v0.8.0-rc2@sha256:435840a9a03e5e73b8fd42408f83222507162ecec9eea4e28e7075ba23e4619f";
+    :local rmxImageFull "ghcr.io/mushtaqraad78-arch/radiusmax-agent:v0.8.0-rc2@sha256:435840a9a03e5e73b8fd42408f83222507162ecec9eea4e28e7075ba23e4619f";
     # Quoted custom identifier avoids the RouterOS 7.24.2 external-source parser
     # rejecting the old bare rmxGateway declaration at block line 7 column 17.
     :local "rmxCentralURL";
@@ -41,7 +41,8 @@
         :if ($rmxExistingComment != $rmxManagedComment) do={
             :error "RadiusMax: container name already belongs to an unmanaged object; no changes made";
         };
-        :local rmxExistingStatus [/container get $rmxExistingContainer status];
+        :local rmxExistingStatus "";
+        :onerror e in={ :set rmxExistingStatus [/container get $rmxExistingContainer status] } do={};
         :if (($rmxExistingStatus ~ "failed") or ($rmxExistingStatus ~ "error")) do={
             :error ("RadiusMax: managed container exists in failed partial-install state (" . $rmxExistingStatus . "); inspect and remove only that failed container before retrying");
         };
@@ -370,14 +371,26 @@
         :local rmxNewContainer [/container find where name=$rmxContainerName];
         :local rmxWait 0;
         :while ($rmxWait < 120) do={
-            :local rmxStatus [/container get $rmxNewContainer status];
-            :if ($rmxStatus = "stopped") do={ :set rmxWait 120 } else={
-                :if (($rmxStatus ~ "error") or ($rmxStatus ~ "failed")) do={ :error ("container extraction failed: " . $rmxStatus) };
+            :local rmxIsStopped false;
+            :onerror e1 in={ :set rmxIsStopped [/container get $rmxNewContainer stopped] } do={};
+            :if ($rmxIsStopped != true) do={
+                :onerror e2 in={
+                    :local s [/container get $rmxNewContainer status];
+                    :if ($s = "stopped") do={ :set rmxIsStopped true };
+                    :if (($s ~ "error") or ($s ~ "failed")) do={ :error ("container extraction failed: " . $s) };
+                } do={};
+            };
+            :if ($rmxIsStopped = true) do={ :set rmxWait 120 } else={
                 :delay 5s;
                 :set rmxWait ($rmxWait + 1);
             };
         };
-        :if ([/container get $rmxNewContainer status] != "stopped") do={ :error "container extraction timed out" };
+        :local rmxFinalStopped false;
+        :onerror e3 in={ :set rmxFinalStopped [/container get $rmxNewContainer stopped] } do={};
+        :if ($rmxFinalStopped != true) do={
+            :onerror e4 in={ :if ([/container get $rmxNewContainer status] = "stopped") do={ :set rmxFinalStopped true } } do={};
+        };
+        :if ($rmxFinalStopped != true) do={ :error "container extraction timed out" };
     } do={
         /container config set registry-url=$rmxOldRegistry tmpdir=$rmxOldTmp;
         :error ("RadiusMax: image pull/extraction failed safely: " . $rmxPullError);
@@ -386,9 +399,19 @@
     :put ("RadiusMax image downloaded and extracted: " . $rmxImageFull);
     :put "RadiusMax container created with start-on-boot enabled";
 
+    :local rmxStatusScript [/system script find where name="radiusmax-status"];
+    :if ([:len $rmxStatusScript] = 0) do={
+        /system script add name="radiusmax-status" source=":local sf [/file find where name~\"radiusmax/state/status.txt\$\"]; :if ([:len \$sf] > 0) do={ :put [/file get [:pick \$sf 0] contents] } else={ :put \"RadiusMax Agent is initializing... please wait a few moments and run this command again.\" };" comment=$rmxManagedComment;
+    } else={
+        /system script set $rmxStatusScript source=":local sf [/file find where name~\"radiusmax/state/status.txt\$\"]; :if ([:len \$sf] > 0) do={ :put [/file get [:pick \$sf 0] contents] } else={ :put \"RadiusMax Agent is initializing... please wait a few moments and run this command again.\" };";
+    };
+
     :local rmxNewContainer [/container find where name=$rmxContainerName];
     /container start $rmxNewContainer;
     :put "RadiusMax Agent started. Existing subscriber traffic was not changed.";
     :put "RadiusMax waiting for Owner approval: the Agent is enrolling automatically and should appear as Pending.";
+    :put "To check Agent status and view your Activation Code, run: /system script run radiusmax-status";
     :put "Persistent enrollment state must never be deleted, copied, or shared between routers.";
 }
+
+
